@@ -1,7 +1,6 @@
+use csv;
 use csv::StringRecord;
 use time::{Date, Time, Month};
-
-use csv::Reader;
 
 use std::panic;
 use std::fs::File;
@@ -104,7 +103,7 @@ fn vec_to_string<T: ToString>(v: &Vec<T>) -> String {
         ret.push_str(&viter.to_string());
         
         if index < v.len() - 1 {
-            ret.push(',');
+            ret.push('_');
         }
     }
 
@@ -139,7 +138,7 @@ fn csv_to_time_entry(path: &str, ignore_header: bool) -> Result<Vec<TimeEntry>, 
         return Err(io::Error::new(io::ErrorKind::NotFound, "Couldn't open the {path}!"));
     };
 
-    let mut reader = Reader::from_reader(file);
+    let mut reader = csv::Reader::from_reader(file);
 
     let mut skipping_row = ignore_header;
 
@@ -167,10 +166,13 @@ fn csv_to_time_entry(path: &str, ignore_header: bool) -> Result<Vec<TimeEntry>, 
 
 fn main() {
     let path = "Data/Clockify.csv";
-
     let v = csv_to_time_entry(path, true).unwrap();
 
+    let mut writer = csv::Writer::from_path("output.csv").expect("Failed to create \"output.csv\" file!");
+
     for viter in v.iter() {
-        println!("{}", viter);
+        writer.write_record(&[viter.to_string()]).expect("Failed to write TimeEntry to CSV");
     }
+
+    writer.flush().expect("Failed to flush CSV writes");
 }
