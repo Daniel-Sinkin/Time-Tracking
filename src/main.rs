@@ -1,9 +1,15 @@
+use csv::StringRecord;
 use time::{Date, Time, Month};
 
 use csv::Reader;
 
-use std::{fs::File, str::FromStr};
+use std::panic;
+use std::fs::File;
+use std::str::FromStr;
+use std::fmt;
+use std::io;
 
+// Enum <-> string interaction
 use strum_macros::EnumString;
 
 #[derive(strum::Display, EnumString)]
@@ -25,6 +31,22 @@ struct TimeEntry {
     description : String
 }
 
+impl fmt::Display for TimeEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{},{{{}}},{},{},{},{},{}",
+            self.category,
+            vec_to_string(&self.tags),
+            self.start_date,
+            time_to_string(self.start_time),
+            self.end_date,
+            time_to_string(self.end_time),
+            if &self.description != "" { self.description.clone() } else { String::from("\"\"") },
+        )
+    }
+}
+
 fn parse_month(month_str: &str) -> Option<Month> {
     match month_str {
         "01" => Some(Month::January),
@@ -43,7 +65,7 @@ fn parse_month(month_str: &str) -> Option<Month> {
     }
 }
 
-fn string_to_time(str: String) -> Time {
+fn string_to_time(str: &str) -> Time {
     // This only works if the string is formatted as HH:MM:SS
     let str_hrs = &str[0..=1];
     let str_min = &str[3..=4];
@@ -54,7 +76,7 @@ fn string_to_time(str: String) -> Time {
         str_sec.parse::<u8>().unwrap()).unwrap()
 }
 
-fn string_to_date(str: String) -> Date {
+fn string_to_date(str: &str) -> Date {
     // This only works if the string is formatted as dd/mm/yyyy
     let str_day = &str[0..=1];
     let day = str_day.parse::<u8>().unwrap();
@@ -69,33 +91,86 @@ fn string_to_date(str: String) -> Date {
     Date::from_calendar_date(year, month, day).unwrap()
 }
 
-fn main() {
-    println!("Hello, World!");
+fn time_to_string(tme: Time) -> String {
+    let (hour, minute, second) = tme.as_hms();
 
-    // Category, Tags, Task, startDate, startTime, endDate, endTime, Description / Notes
+    format!("{:02}:{:02}:{:02}", hour, minute, second)
+}
 
-    let path = "Data/Clockify.csv";
-    let file = File::open(path).unwrap();
+fn vec_to_string<T: ToString>(v: &Vec<T>) -> String {
+    let mut ret = String::from("");
+
+    for (index, viter) in v.iter().enumerate() {
+        ret.push_str(&viter.to_string());
+        
+        if index < v.len() - 1 {
+            ret.push(',');
+        }
+    }
+
+    ret
+}
+
+fn string_record_to_time_entry(record: &StringRecord) -> Result<TimeEntry, io::Error> {
+    let category = Category::from_str(&record[0]).unwrap();
+    let tags: Vec<Tag> = vec![Tag::Rust, Tag::Cpp, Tag::Finance];
+    let start_date = string_to_date(&record[9]);
+    let start_time = string_to_time(&record[10]);
+    let end_date = string_to_date(&record[11]);
+    let end_time = string_to_time(&record[12]);
+    let description = String::from("");
+
+    Ok(TimeEntry {
+        category,
+        tags,
+        start_date,
+        start_time,
+        end_date,
+        end_time,
+        description,
+    })
+}
+
+fn csv_to_time_entry(path: &str, ignore_header: bool) -> Result<Vec<TimeEntry>, io::Error> {
+    // Opening the file
+    let file = if let Ok(x) = File::open(path) {
+        x
+    } else {
+        return Err(io::Error::new(io::ErrorKind::NotFound, "Couldn't open the {path}!"));
+    };
 
     let mut reader = Reader::from_reader(file);
 
-    let mut is_header = true;
+    let mut skipping_row = ignore_header;
 
+    let mut time_entries: Vec<TimeEntry> = Vec::new();
     while let Some(x) = reader.records().next() {
-        if is_header {
-            is_header = false;
+        if skipping_row { // Skips the first line
+            skipping_row = false;
         } else {
-            if let Ok(y) = x {
-                let te = TimeEntry{
-                    category: Category::from_str(&y[0]).unwrap(),
-                    tags: vec![],
-                    start_date: string_to_date(String::from(&y[9])),
-                    start_time: string_to_time(String::from(&y[10])),
-                    end_date: string_to_date(String::from(&y[11])),
-                    end_time: string_to_time(String::from(&y[12])),
-                    description: String::from(""),
-                };
+            if let Ok(record) = x {
+                time_entries.push(string_record_to_time_entry(&record).unwrap());
+
+                if let Ok(x) = string_record_to_time_entry(&record) {
+                    time_entries.push(x);
+                } else {
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "Couldn't convert StringRecord to TimeEntry"));
+                }
+            } else {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Couldn't create the StringRecord"));
             }
         }
+    }
+
+    Ok(time_entries)
+}
+
+fn main() {
+    let path = "Data/Clockify.csv";
+
+    let v = csv_to_time_entry(path, true).unwrap();
+
+    for viter in v.iter() {
+        println!("{}", viter);
     }
 }
