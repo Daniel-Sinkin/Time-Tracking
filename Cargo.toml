@@ -12,3 +12,5 @@ strum = { version = "0.24", features = ["derive"] }
 strum_macros = "0.24"
 csv = "1.2.1"
 serde = "1.0.163"
+egui = "0.21.0"
+eframe = "0.21.3"

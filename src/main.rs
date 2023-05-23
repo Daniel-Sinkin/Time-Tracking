@@ -8,6 +8,9 @@ use std::str::FromStr;
 use std::fmt;
 use std::io;
 
+// use eframe::epi;
+use eframe::egui;
+
 // Enum <-> string interaction
 use strum_macros::EnumString;
 
@@ -164,15 +167,25 @@ fn csv_to_time_entry(path: &str, ignore_header: bool) -> Result<Vec<TimeEntry>, 
     Ok(time_entries)
 }
 
+
+fn ui_counter(ui: &mut egui::Ui, counter: &mut i32) {
+    // Put the buttons and label on the same row:
+    ui.horizontal(|ui| {
+        if ui.button("-").clicked() {
+            *counter -= 1;
+        }
+        ui.label(counter.to_string());
+        if ui.button("+").clicked() {
+            *counter += 1;
+        }
+    });
+}
+
 fn main() {
     let path = "Data/Clockify.csv";
     let v = csv_to_time_entry(path, true).unwrap();
 
-    let mut writer = csv::Writer::from_path("output.csv").expect("Failed to create \"output.csv\" file!");
-
     for viter in v.iter() {
-        writer.write_record(&[viter.to_string()]).expect("Failed to write TimeEntry to CSV");
+        println!("{}", viter);
     }
-
-    writer.flush().expect("Failed to flush CSV writes");
 }
